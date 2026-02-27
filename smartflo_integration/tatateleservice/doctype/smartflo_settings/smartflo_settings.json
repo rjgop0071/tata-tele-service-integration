@@ -1,0 +1,70 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-02-23 14:01:58.884464",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "generate_token_section",
+  "access_token",
+  "default_agent_number",
+  "default_caller_id",
+  "api_base_url"
+ ],
+ "fields": [
+  {
+   "fieldname": "generate_token_section",
+   "fieldtype": "Section Break",
+   "label": "Generate Token"
+  },
+  {
+   "fieldname": "access_token",
+   "fieldtype": "JSON",
+   "label": "Access Token"
+  },
+  {
+   "fieldname": "default_agent_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Default Agent Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_caller_id",
+   "fieldtype": "Data",
+   "label": "Default Caller ID"
+  },
+  {
+   "fieldname": "api_base_url",
+   "fieldtype": "Data",
+   "label": "API Base URL"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-02-24 14:49:27.231167",
+ "modified_by": "Administrator",
+ "module": "TataTeleservice",
+ "name": "Smartflo Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_views": 1
+}

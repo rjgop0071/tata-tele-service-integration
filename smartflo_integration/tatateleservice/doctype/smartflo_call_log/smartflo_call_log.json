@@ -1,0 +1,98 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-02-25 17:01:40.815335",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "call_id",
+  "direction",
+  "agent_number",
+  "customer_number",
+  "did",
+  "state",
+  "created_at",
+  "call_time",
+  "agent_name",
+  "raw_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "call_id",
+   "fieldtype": "Data",
+   "label": "Call ID"
+  },
+  {
+   "fieldname": "direction",
+   "fieldtype": "Data",
+   "label": "Direction"
+  },
+  {
+   "fieldname": "agent_number",
+   "fieldtype": "Data",
+   "label": "Agent Number"
+  },
+  {
+   "fieldname": "customer_number",
+   "fieldtype": "Data",
+   "label": "Customer Number"
+  },
+  {
+   "fieldname": "did",
+   "fieldtype": "Data",
+   "label": "Caller ID (DID)"
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "Call Status"
+  },
+  {
+   "fieldname": "created_at",
+   "fieldtype": "Datetime",
+   "label": "Call Start Time"
+  },
+  {
+   "fieldname": "call_time",
+   "fieldtype": "Data",
+   "label": "Call Duration"
+  },
+  {
+   "fieldname": "agent_name",
+   "fieldtype": "Data",
+   "label": "Agent Name"
+  },
+  {
+   "fieldname": "raw_json",
+   "fieldtype": "Long Text",
+   "label": "Raw Payload"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-02-25 17:08:15.832177",
+ "modified_by": "Administrator",
+ "module": "TataTeleservice",
+ "name": "Smartflo Call Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
