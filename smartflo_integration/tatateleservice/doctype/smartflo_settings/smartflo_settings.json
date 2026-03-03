@@ -19,8 +19,9 @@
   },
   {
    "fieldname": "access_token",
-   "fieldtype": "JSON",
-   "label": "Access Token"
+   "fieldtype": "Password",
+   "label": "Access Token",
+   "length": 500
   },
   {
    "fieldname": "default_agent_number",
@@ -44,7 +45,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-02-24 14:49:27.231167",
+ "modified": "2026-03-03 11:58:16.339482",
  "modified_by": "Administrator",
  "module": "TataTeleservice",
  "name": "Smartflo Settings",
