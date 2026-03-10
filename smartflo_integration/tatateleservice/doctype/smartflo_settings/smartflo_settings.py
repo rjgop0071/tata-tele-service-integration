@@ -1,7 +1,7 @@
 import frappe
-import requests
 from frappe import _
 from frappe.model.document import Document
+from frappe.integrations.utils import make_get_request, make_post_request
 
 
 # =========================================================
@@ -16,7 +16,8 @@ class SmartfloSettings(Document):
 # SMARTFLO HEADER BUILDER
 # =========================================================
 def get_smartflo_headers():
-    settings = frappe.get_single("Smartflo Settings")
+    # Use get_cached_doc for Single doctypes to avoid repeated DB hits
+    settings = frappe.get_cached_doc("Smartflo Settings")
 
     token = settings.access_token
     if not token:
@@ -28,8 +29,16 @@ def get_smartflo_headers():
     return {
         "Authorization": token,
         "Accept": "application/json",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
+
+
+def get_smartflo_settings():
+    """Centralised settings fetch with validation."""
+    settings = frappe.get_cached_doc("Smartflo Settings")
+    if not settings.api_base_url:
+        frappe.throw(_("Smartflo API Base URL not configured."))
+    return settings
 
 
 # =========================================================
@@ -38,13 +47,8 @@ def get_smartflo_headers():
 @frappe.whitelist()
 def smartflo_click_to_call(destination_number, agent_number=None, caller_id=None):
     try:
-        settings = frappe.get_single("Smartflo Settings")
-
-        if not settings.api_base_url:
-            frappe.throw(_("Smartflo API Base URL not configured."))
-
+        settings = get_smartflo_settings()
         headers = get_smartflo_headers()
-        url = f"{settings.api_base_url}/v1/click_to_call"
 
         agent = agent_number or settings.default_agent_number
         caller = caller_id or settings.default_caller_id
@@ -54,24 +58,26 @@ def smartflo_click_to_call(destination_number, agent_number=None, caller_id=None
         if not caller:
             frappe.throw(_("Caller ID not configured."))
 
+        url = f"{settings.api_base_url}/v1/click_to_call"
         payload = {
             "async": 0,
             "agent_number": agent,
             "destination_number": destination_number,
-            "caller_id": caller
+            "caller_id": caller,
         }
 
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        frappe.log_error(response.text, "Smartflo ClickToCall Response")
+        # Use Frappe's built-in HTTP helper — pass as JSON not form data
+        response = make_post_request(url, data=frappe.as_json(payload), headers=headers)
 
-        if response.status_code != 200:
-            frappe.throw(_("Smartflo API Error: {0}").format(response.status_code))
+        frappe.log_error("Smartflo ClickToCall Response", frappe.as_json(response))
 
-        return {"status": "success", "data": response.json()}
+        return {"status": "success", "data": response}
 
+    except frappe.ValidationError:
+        raise
     except Exception:
-        frappe.log_error(frappe.get_traceback(), "Smartflo ClickToCall Error")
-        frappe.throw(_("Click-to-call failed"))
+        frappe.log_error("Smartflo ClickToCall Error", frappe.get_traceback())
+        frappe.throw(_("Click-to-call failed. Check Error Log for details."))
 
 
 # =========================================================
@@ -80,27 +86,36 @@ def smartflo_click_to_call(destination_number, agent_number=None, caller_id=None
 @frappe.whitelist()
 def smartflo_sync_live_calls(agent_number=None):
     try:
-        settings = frappe.get_single("Smartflo Settings")
-
-        if not settings.api_base_url:
-            frappe.throw(_("Smartflo API Base URL not configured."))
-
+        settings = get_smartflo_settings()
         headers = get_smartflo_headers()
-        agent = agent_number or settings.default_agent_number
 
+        agent = agent_number or settings.default_agent_number
         if not agent:
             frappe.throw(_("Agent number not configured."))
 
         url = f"{settings.api_base_url}/v1/live_calls?agent_number={agent}"
-        response = requests.get(url, headers=headers, timeout=30)
 
-        if response.status_code != 200:
-            frappe.throw(_("Smartflo API Error: {0}").format(response.status_code))
+        # Use Frappe's built-in HTTP helper instead of raw `requests`
+        json_data = make_get_request(url, headers=headers)
 
-        json_data = response.json()
-        frappe.log_error(json_data, "Smartflo Live Calls Raw")
+        frappe.log_error("Smartflo Live Calls Raw", frappe.as_json(json_data))
 
         calls = json_data if isinstance(json_data, list) else json_data.get("data", [])
+
+        if not calls:
+            return {"status": "success", "inserted": 0, "total_received": 0, "latest_call_id": None}
+
+        # Collect all incoming call_ids to check existence in one DB query
+        # Avoids N+1 DB problem by fetching all existing call IDs up front
+        incoming_call_ids = [c.get("call_id") for c in calls if c.get("call_id")]
+
+        existing_call_ids = set(
+            frappe.get_all(
+                "Smartflo Call Log",
+                filters={"call_id": ["in", incoming_call_ids]},
+                pluck="call_id",
+            )
+        )
 
         inserted = 0
         latest_call_id = None
@@ -112,7 +127,7 @@ def smartflo_sync_live_calls(agent_number=None):
 
             latest_call_id = call_id
 
-            if frappe.db.exists("Smartflo Call Log", {"call_id": call_id}):
+            if call_id in existing_call_ids:
                 continue
 
             doc = frappe.new_doc("Smartflo Call Log")
@@ -136,12 +151,14 @@ def smartflo_sync_live_calls(agent_number=None):
             "status": "success",
             "inserted": inserted,
             "total_received": len(calls),
-            "latest_call_id": latest_call_id
+            "latest_call_id": latest_call_id,
         }
 
+    except frappe.ValidationError:
+        raise
     except Exception:
-        frappe.log_error(frappe.get_traceback(), "Smartflo Live Call Sync Error")
-        frappe.throw(_("Live call sync failed"))
+        frappe.log_error("Smartflo Live Call Sync Error", frappe.get_traceback())
+        frappe.throw(_("Live call sync failed. Check Error Log for details."))
 
 
 # =========================================================
@@ -150,31 +167,23 @@ def smartflo_sync_live_calls(agent_number=None):
 @frappe.whitelist()
 def smartflo_hangup_call(call_id: str):
     try:
-        settings = frappe.get_single("Smartflo Settings")
-
-        if not settings.api_base_url:
-            frappe.throw(_("Smartflo API Base URL not configured."))
-
+        settings = get_smartflo_settings()
         headers = get_smartflo_headers()
+
         url = f"{settings.api_base_url}/v1/call/hangup"
 
-        response = requests.post(
-            url,
-            json={"call_id": call_id},
-            headers=headers,
-            timeout=30
-        )
+        # Use Frappe's built-in HTTP helper — pass as JSON not form data
+        response = make_post_request(url, data=frappe.as_json({"call_id": call_id}), headers=headers)
 
-        frappe.log_error(response.text, "Smartflo Hangup Response")
-
-        if response.status_code != 200:
-            frappe.throw(_("Hangup failed ({0})").format(response.status_code))
+        frappe.log_error("Smartflo Hangup Response", frappe.as_json(response))
 
         return {"status": "success"}
 
+    except frappe.ValidationError:
+        raise
     except Exception:
-        frappe.log_error(frappe.get_traceback(), "Smartflo Hangup Error")
-        frappe.throw(_("Call hangup failed"))
+        frappe.log_error("Smartflo Hangup Error", frappe.get_traceback())
+        frappe.throw(_("Call hangup failed. Check Error Log for details."))
 
 
 # =========================================================
@@ -183,24 +192,17 @@ def smartflo_hangup_call(call_id: str):
 @frappe.whitelist()
 def smartflo_sync_call_record(call_id: str):
     try:
-        settings = frappe.get_single("Smartflo Settings")
-
-        if not settings.api_base_url:
-            frappe.throw(_("Smartflo API Base URL not configured."))
-
+        settings = get_smartflo_settings()
         headers = get_smartflo_headers()
+
         url = f"{settings.api_base_url}/v1/call/records?call_id={call_id}"
 
-        response = requests.get(url, headers=headers, timeout=30)
+        # Use Frappe's built-in HTTP helper instead of raw `requests`
+        json_data = make_get_request(url, headers=headers)
 
-        if response.status_code != 200:
-            frappe.throw(_("Smartflo Record API Error: {0}").format(response.status_code))
-
-        json_data = response.json()
-        frappe.log_error(json_data, "Smartflo Records Raw")
+        frappe.log_error("Smartflo Records Raw", frappe.as_json(json_data))
 
         records = json_data.get("results", [])
-
         if not records:
             return {"status": "no_record"}
 
@@ -210,9 +212,10 @@ def smartflo_sync_call_record(call_id: str):
         if frappe.db.exists("Smartflo Call Record", {"call_id": call_id_val}):
             return {"status": "exists"}
 
+        # Safely build start_time only when both fields are present
         start_time = None
         if rec.get("date") and rec.get("time"):
-            start_time = f"{rec.get('date')} {rec.get('time')}"
+            start_time = f"{rec['date']} {rec['time']}"
 
         doc = frappe.new_doc("Smartflo Call Record")
         doc.call_id = call_id_val
@@ -233,6 +236,8 @@ def smartflo_sync_call_record(call_id: str):
 
         return {"status": "inserted", "record_saved": True}
 
+    except frappe.ValidationError:
+        raise
     except Exception:
-        frappe.log_error(frappe.get_traceback(), "Smartflo Call Record Sync Error")
-        frappe.throw(_("Call record sync failed"))
+        frappe.log_error("Smartflo Call Record Sync Error", frappe.get_traceback())
+        frappe.throw(_("Call record sync failed. Check Error Log for details."))
